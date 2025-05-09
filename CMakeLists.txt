@@ -170,6 +170,7 @@ catkin_install_python(PROGRAMS
   scripts/test.py
   scripts/main.py
   scripts/test_0307.py
+  scripts/socket_GUI.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
