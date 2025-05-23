@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 import sys
 import copy
 import rospy
@@ -92,10 +92,10 @@ class Move_Group(object):   # 로봇팔의 움직임 제어 클래스
         self.move_group.set_max_acceleration_scaling_factor(Max_Joint_ACC)
         self.move_group.limit_max_cartesian_link_speed(Cartesian_Speed)
         self.move_group.set_end_effector_link("tool0")  # "tool0"을 실제 로봇의 엔드 이펙터 링크 이름으로 변경
+        # PREEMPTED 상태 감지를 위한 변수 추가 
+        self.preempted_detected = False        
         # ROS 로그 콜백 설정
 
-        current_eef = self.move_group.get_end_effector_link()
-        self.move_group.set_end_effector_link(current_eef)  # "tool0"을 실제 로봇의 엔드 이펙터 링크 이름으로 변경
 
         print("\033[1;33m============")
         print("초기화 완료")
@@ -175,6 +175,10 @@ class Move_Group(object):   # 로봇팔의 움직임 제어 클래스
 
     def movel(self, waypoints, mod="None"):         # 직교 공간 좌표 이동. 웨이포인트 다수 지정 가능.
         if isInterrupted or self.prog_stopped:      
+            print('interuppted@!@!@!@!@')
+            print('interuppted@!@!@!@!@')
+            print('interuppted@!@!@!@!@')
+            print('interuppted@!@!@!@!@')
             return False
         waypoints_list = []
         wpose = self.move_group.get_current_pose().pose
@@ -213,9 +217,16 @@ class Move_Group(object):   # 로봇팔의 움직임 제어 클래스
             # print("이동할 웨이포인트가 없습니다.")
             return True  # 이미 목표 위치에 있으므로 성공으로 처리
 
+        self.preempted_detected = False
+        
         # 실행
         result = self.execute_cartesian_path(waypoints_list)
-
+        
+        # 실행 후 PREEMPTED 상태 확인
+        if self.preempted_detected:
+            rospy.logwarn("PREEMPTED 상태가 감지되어 1초 후 재시도합니다.")
+            rospy.sleep(1.0)
+            return self.movel(waypoints, mod)
         
         return result
 
@@ -248,18 +259,33 @@ class Move_Group(object):   # 로봇팔의 움직임 제어 클래스
     def execute_cartesian_path(self, waypoints):
         if self.prog_stopped:
             return
-        max_attempts = 10
+        max_attempts = 5
+        
+        # 속도에 따른 eef_step 조정 (더 느린 속도일 경우 더 작은 스텝으로)
+        base_eef_step = 0.004  # 기본 스텝 크기
+        scaled_step = base_eef_step * max(0.2, Cartesian_Speed / 0.4)  # 최소 스텝 크기 보장
+        
         for attempt in range(max_attempts):
-            for eef_step in [0.004, 0.008, 0.01]:  # 조정된 스텝 크기 사용
-                (plan, fraction) = self.move_group.compute_cartesian_path(
-                    waypoints, 
-                    eef_step, 
-                )
-                if fraction == 1.0:  # 100% 경로 생성 성공
-                    if attempt != 0:  # 단번에 계획 안 됐을 시 출력
-                        print(f"카테시안 경로 계획 성공: {attempt+1}회 시도, eef_step: {eef_step}, ")
-                    self.move_group.execute(plan, wait=True)
-                    return True
+            # for eef_step in [scaled_step, scaled_step*2]:  # 조정된 스텝 크기 사용
+            for eef_step in [0.001, 0.002, 0.004, 0.008]:  # 조정된 스텝 크기 사용
+                for jump_threshold in [0, 1.57]:  # 두 가지 점프 임계값 시도
+                    (plan, fraction) = self.move_group.compute_cartesian_path(
+                        waypoints, 
+                        eef_step, 
+                        jump_threshold
+                        # avoid_collisions=True  # 충돌 회피 사용
+                    )
+                    if fraction == 1.0:  # 100% 경로 생성 성공
+                        if attempt != 0:  # 단번에 계획 안 됐을 시 출력
+                            print(f"카테시안 경로 계획 성공: {attempt+1}회 시도, eef_step: {eef_step}, jump_threshold: {jump_threshold}")
+                        # self.display_trajectory(plan)
+                        try:
+                            self.move_group.execute(plan, wait=True)
+                        except Exception as e:
+                            if "PREEMPTED" in str(e):
+                                execute_cartesian_path(waypoints)
+                                pass
+                        return True
                 rospy.sleep(0.05)  # 다음 시도 전 잠시 대기
             
         print("카테시안 경로 생성 실패: 목표 위치가 도달 가능한지 확인하세요.")
@@ -298,7 +324,7 @@ class Gripper():            # 로봇팔 말단(eef)의 그리퍼 제어 클래�
         if not isTest:
             self.gripper.write(b"\x09\x10\x03\xE8\x00\x03\x06\x09\x00\x00\x00\xFF\xFF\x72\x19")
 
-        # print("Gripper Opened")
+        print("Gripper Opened")
         time.sleep(0.7)
 
     def close(self):
@@ -307,7 +333,7 @@ class Gripper():            # 로봇팔 말단(eef)의 그리퍼 제어 클래�
         if not isTest:
             self.gripper.write(b"\x09\x10\x03\xE8\x00\x03\x06\x09\x00\x00\xFF\xFF\xFF\x42\x29")
 
-        # print("Gripper Closed")
+        print("Gripper Closed")
         time.sleep(0.7)
 
 class RealSense:            # 로봇팔 말단(eef)에 부착된 Realsense D435i 제어 클래스
@@ -820,11 +846,11 @@ def Unload():
     if isInterrupted or UR.prog_stopped:
         return
     # 1단계: Mid 위치에서 Machine_high 위치로 이동
-    waypoints_to_unload = [posx_Mid, posx_Machine_high, posx_Machine]
-    UR.movel(waypoints_to_unload, "abs")
-    # UR.movel([posx_Mid], "abs")
-    # UR.movel([posx_Machine_high], "abs")
-    # UR.movel([posx_Machine], "abs")
+    # waypoints_to_unload = [posx_Mid, posx_Machine_high, posx_Machine]
+    # UR.movel(waypoints_to_unload, "abs")
+    UR.movel([posx_Mid], "abs")
+    UR.movel([posx_Machine_high], "abs")
+    UR.movel([posx_Machine], "abs")
     
     # 3단계: 그리퍼 닫아서 물체 집기
     gripper.close()
@@ -832,9 +858,9 @@ def Unload():
     
     # 4단계: Machine에서 Machine_high로 상승
     waypoints_to_unload2 = [posx_Machine_high, posx_Mid]
-    UR.movel(waypoints_to_unload2, "abs")
-    # UR.movel([posx_Machine_high], "abs")
-    # UR.movel([posx_Mid], "abs")
+    # UR.movel(waypoints_to_unload2, "abs")
+    UR.movel([posx_Machine_high], "abs")
+    UR.movel([posx_Mid], "abs")
 
 def MoveToObjectPosition(num):
     global UR
@@ -885,8 +911,7 @@ def signal_handler(sig, frame): # Ctrl+C 인터럽트 시 실행하여 안전 �
         print("\nCtrl+C pressed. Stopping the robot...")
         isInterrupted = True
         shutdown()
-        import os
-        os._exit(0)  # Force terminate the process
+
 def main():                     # 메인 함수
     global UR, gripper, isInterrupted, realsense
     signal.signal(signal.SIGINT, signal_handler)
@@ -914,11 +939,11 @@ def shutdown():                 # 안전종료 메서드
     UR.move_group.stop()
     rospy.signal_shutdown("종료")
     moveit_commander.roscpp_shutdown()
+    print("\033[1;33m종료됨.\033[0m")
     if client_socket:
         client_socket.close()
     if server_socket:
         server_socket.close()
-    print("\033[1;33m종료됨.\033[0m")
 
 if __name__ == "__main__":
     main()

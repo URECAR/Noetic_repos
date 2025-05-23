@@ -9,6 +9,7 @@
       <arg name="robot_ip" value="192.168.56.101" />
     </include>
     <include file="$(find ur10e_moveit_config)/launch/move_group.launch" />
+      <arg name="debug" value="true"/>
   </group>
 
   <!-- Real Mode -->
