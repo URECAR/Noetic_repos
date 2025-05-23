@@ -14,11 +14,10 @@
 
   <!-- Real Mode -->
   <group if="$(eval mode == 'real')">
-    <include file="$(find hande_bringup)/launch/ur10e_hande_bringup.launch">
+    <include file="$(find ur_robot_driver)/launch/ur10e_bringup.launch">
       <arg name="robot_ip" value="$(arg ip)" />
       <arg name="kinematics_config" value="/root/catkin_ws/setting_file/calib_real.yaml" />
-      <arg name="is_machine_tending" value="true" />
     </include>
-    <include file="$(find ur10e_hande_moveit_config)/launch/move_group.launch" />
+    <include file="$(find ur10e_moveit_config)/launch/move_group.launch" />
   </group>
 </launch>

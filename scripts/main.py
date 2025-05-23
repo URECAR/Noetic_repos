@@ -82,6 +82,8 @@ class Move_Group(object):   # 로봇팔의 움직임 제어 클래스
         self.robot = moveit_commander.RobotCommander()                          # moveit commander Init
         self.scene = moveit_commander.PlanningSceneInterface()                  # moveit world spawn
         self.move_group = moveit_commander.MoveGroupCommander(group_name)       # move_group instance Init
+        current_eef = self.move_group.get_end_effector_link()
+        self.move_group.set_end_effector_link(current_eef)  # "tool0"을 실제 로봇의 엔드 이펙터 링크 이름으로 변경
         # self.display_trajectory_publisher = rospy.Publisher("/move_group/display_planned_path", moveit_msgs.msg.DisplayTrajectory, queue_size=20)
         self.current_joints = None
         self.current_pose = None    # quaternion 사용하는 ur pos
@@ -91,11 +93,8 @@ class Move_Group(object):   # 로봇팔의 움직임 제어 클래스
         self.move_group.set_max_velocity_scaling_factor(Max_Joint_VEL)
         self.move_group.set_max_acceleration_scaling_factor(Max_Joint_ACC)
         self.move_group.limit_max_cartesian_link_speed(Cartesian_Speed)
-        self.move_group.set_end_effector_link("tool0")  # "tool0"을 실제 로봇의 엔드 이펙터 링크 이름으로 변경
         # ROS 로그 콜백 설정
 
-        current_eef = self.move_group.get_end_effector_link()
-        self.move_group.set_end_effector_link(current_eef)  # "tool0"을 실제 로봇의 엔드 이펙터 링크 이름으로 변경
 
         print("\033[1;33m============")
         print("초기화 완료")
@@ -250,7 +249,7 @@ class Move_Group(object):   # 로봇팔의 움직임 제어 클래스
             return
         max_attempts = 10
         for attempt in range(max_attempts):
-            for eef_step in [0.004, 0.008, 0.01]:  # 조정된 스텝 크기 사용
+            for eef_step in [0.002, 0.004, 0.008, 0.01]:  # 조정된 스텝 크기 사용
                 (plan, fraction) = self.move_group.compute_cartesian_path(
                     waypoints, 
                     eef_step, 
